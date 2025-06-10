@@ -1,119 +1,83 @@
-#!/usr/bin/env python
 import os
 import hail as hl
 from hail.vds.combiner import VariantDatasetCombiner
 
-##################################
-########## INSTRUCTIONS ##########
-##################################
-"""
-This script is designed to merge gVCF files into either a new or existing VDS and perform sample level QC. If you do not have an existing VDS, comment out the following line of code: ds_paths=[existing_vds_path].
-"""
-##################################
-########## VARIABLES #############
-##################################
-"""
-Define the necessary file and directory paths for the analysis. Change accordingly.
-"""
+# Set resources and file paths
+ncpu = "local[20]"
+ram = "140g"  # Set as string (in bytes) or adjust as needed
+BF = 15    # Branch factor
+GBS = 10    # gVCF batch size
 
-# Set Resources
-cpu="local[8]"
-ram= '471859200'
+# Set Temporary paths
 
-# Path to hail logs
-log = 'hail.log'
-
-# Directory containing all gvcf files 
-gvcf_files = 'pipeline/Test_gvcfs' 
-
-# Define VDS path
-output_vds = "pipeline/merge2.vds"
-
-# Path to existing VDS (see Hail_Pipeline.py instructions)
-existing_vds_path = 'pipeline/Merged.vds'
-
-# Define combiner directory path (contains all intermediate files)
-combiner_tmp = "pipeline/merge3_combiner_tmp"
-
-# Define path for checkpoint required to restart combiner if fails
+spark_local = '/rds/general/project/lms-ware-analysis/ephemeral/HAIL/spark_local'
+tmp_dir = '/rds/general/project/lms-ware-analysis/ephemeral/HAIL/hail_tmp'
+log = '/rds/general/project/lms-ware-analysis/ephemeral/HAIL/hail.log'
+combiner_tmp = "/rds/general/project/lms-ware-analysis/ephemeral/HAIL/test_combiner_tmp"
 save_path = os.path.join(combiner_tmp, "combiner_plan.json")
 
-# Set degree of file merge parralization 
-BF = 100b
 
-# Set number of gvcf per parralell job
-GBS = 50
+# Set file paths
+gvcf_txt = '/rds/general/project/lms-ware-analysis/live/riyad/Hail/test.txt'
+output_vds = "/rds/general/project/lms-ware-analysis/live/riyad/Hail/test.vds"
+sample_qc = '/rds/general/project/lms-ware-analysis/live/riyad/Hail/test_sample_qc.ht'
 
-# Name and path to sample_qc table
-sample_qc = 'pipeline/TEST_sample_qc.ht'
 
-# Path to directory for MatrixTables
-MT = 'pipeline/MT'
-
-##################################
-############# SCRIPT #############
-##################################
-
+# Initialize Hail
 hl.init(
-        master=cpu,
-        log=log,
-        spark_conf={
-            "spark.driver.bindAddress": "0.0.0.0",
-            "spark.ui.enabled": "false",
-            "spark.driver.memory": ram,
-            "spark.executor.memory": ram
-        }
-    )
-hl.default_reference='GRCh38'
+    master = ncpu,
+    tmp_dir= tmp_dir,
+    spark_conf ={
+        'spark.local.dir': spark_local,
+        'spark.driver.bindAddress': '0.0.0.0',
+        'spark.ui.enabled': 'true',
+        'spark.ui.port': '4040',
+        'spark.driver.memory': ram,
+        'spark.executor.memory': ram,
+    },
+    log = log
+)
 
-def get_gvcf_files(directory):
+hl.default_reference = 'GRCh38'
+
+def get_gvcf_files_from_txt(txt_file):
     """
-    Recursively list full paths of all gVCF files in the given directory.
-
-    Parameters:
-        directory (str): The root directory to search for gVCF files.
-
-    Returns:
-        list: A list of full paths for gVCF files.
+    Reads a text file with one gVCF file path per line and returns a list of paths.
     """
-    gvcf_files = []
-    for root, _, files in os.walk(directory):
-        for file in files:
-            if file.endswith('.g.vcf.gz'):
-                gvcf_files.append(os.path.join(root, file))
-    return gvcf_files
+    with open(txt_file, 'r') as f:
+        paths = [line.strip() for line in f if line.strip()]
+    return paths
 
-if __name__ == '__main__':
-    directory = gvcf_files
-    files = get_gvcf_files(directory)
-    
+# Read gVCF file paths from the provided text file.
+files = get_gvcf_files_from_txt(gvcf_txt)
+print("Found {} gVCF files.".format(len(files)))
 
+# Create and run the combiner to merge gVCF files into a VDS.
 combiner = hl.vds.new_combiner(
-        gvcf_paths=files,
-        output_path=output_vds,
-        temp_path=combiner_tmp,
-        save_path=os.path.join(combiner_tmp, "combiner_plan.json"),
-        reference_genome="GRCh38",
-        use_genome_default_intervals=True,
-        branch_factor=BF,
-        gvcf_batch_size=GBS,
-        vds_paths=[existing_vds_path] # Comment out this line if you do not have an existing VDS
-    )
-
-# Run the combiner
+    gvcf_paths=files,
+    output_path=output_vds,
+    temp_path=combiner_tmp,
+    save_path=save_path,
+    reference_genome="GRCh38",
+    use_genome_default_intervals=True,
+    branch_factor=BF,
+    gvcf_batch_size=GBS,
+    target_records=150_000
+    # If merging into an existing VDS, add the vds_paths parameter.
+)
 combiner.run()
 
-# Load VDS
+# Load the merged VDS.
 vds = hl.vds.read_vds(output_vds)
 
-# Create sample_qc table
+# Compute sample-level QC and checkpoint the resulting table.
 qc_table = hl.vds.sample_qc(
     vds,
     dp_bins=(0, 10, 20, 30, 40, 99),
     gq_bins=(0, 10, 20, 30, 40, 99),
     dp_field='DP'
 )
+qc_table.write(sample_qc, overwrite=True)
+print("Sample QC table written to", sample_qc)
 
-qc_checkpoint_path = sample_qc
-qc_table = qc_table.checkpoint(qc_checkpoint_path, overwrite=True)
-
+hl.stop()
