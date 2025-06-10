@@ -9,7 +9,7 @@ This repository contains a Hail-based pipeline to merge a large number of gVCF f
 Environment Setup
 	1.	Clone the repository:
 
-git clone https://github.com/<your-org>/<your-repo>.git
+git clone [https://github.com/<your-org>/<your-repo>.git](https://github.com/ImperialCardioGenetics/Hail.git)
 cd <your-repo>
 
 
