@@ -4,7 +4,7 @@ from hail.vds.combiner import VariantDatasetCombiner
 
 # Set resources and file paths
 ncpu = "local[20]"
-ram = "140g"  # Set as string (in bytes) or adjust as needed
+ram = "8g"  # Set as string (in bytes) or adjust as needed
 BF = 15    # Branch factor
 GBS = 10    # gVCF batch size
 
@@ -12,6 +12,7 @@ GBS = 10    # gVCF batch size
 
 spark_local = '/rds/general/project/lms-ware-analysis/ephemeral/HAIL/spark_local'
 tmp_dir = '/rds/general/project/lms-ware-analysis/ephemeral/HAIL/hail_tmp'
+
 log = '/rds/general/project/lms-ware-analysis/ephemeral/HAIL/hail.log'
 combiner_tmp = "/rds/general/project/lms-ware-analysis/ephemeral/HAIL/test_combiner_tmp"
 save_path = os.path.join(combiner_tmp, "combiner_plan.json")
@@ -62,7 +63,6 @@ combiner = hl.vds.new_combiner(
     use_genome_default_intervals=True,
     branch_factor=BF,
     gvcf_batch_size=GBS,
-    target_records=150_000
     # If merging into an existing VDS, add the vds_paths parameter.
 )
 combiner.run()
