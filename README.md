@@ -1,87 +1,65 @@
-# Hail
-Merge gVCF files into a new or existing VDS and perform sample level QC (blue), partition VDS into MatrixTables by Chr with variant level QC (green) using Hail. 
+# HAIL on Imperial HPC
 
-gVCF-to-VDS Pipeline
+This repository provides scripts to run [Hail](https://hail.is/) workflows on the Imperial College High Performance Computing (HPC) cluster, specifically for:
 
-This repository contains a Hail-based pipeline to merge a large number of gVCF files into a single Variant Dataset (VDS), compute sample-level QC, and persist the results.
+- Converting multiple single-sample gVCF files into a multi-sample [VDS](https://hail.is/docs/0.2/methods/impex.html#hail.VariantDataset) (Variant Dataset) using the Hail Combiner.
 
+---
 
-Environment Setup
-	1.	Clone the repository:
+## Walkthrough
 
-git clone [https://github.com/<your-org>/<your-repo>.git](https://github.com/ImperialCardioGenetics/Hail.git)
-cd <your-repo>
+### 1. 🔧 Setup
 
+#### a) Clone this repository
+```bash
+git clone https://your.repo.url/here.git
+cd Hail  # or the name of your cloned directory
+```
 
-	2.	Create the Conda environment:
+#### b) Create the Conda environment
 
-conda env create --file environment.yml
+This repository uses a predefined Conda environment (`conda_env.yml`) to ensure all dependencies are consistent. The environment must be created on the **login node** of the Imperial HPC.
 
+See [Imperial HPC Conda guide](https://wiki.imperial.ac.uk/display/HPC/Conda) if needed.
 
-	3.	Activate the environment:
+```bash
+# Enable conda in your shell (adjust the path if needed)
+eval "$(~/anaconda3/bin/conda shell.bash hook)"
 
-conda activate hail
+# Remove existing environment (if it exists)
+conda env remove -n hail
 
+# Create the environment from the provided file
+conda env create --file conda_env.yml
+```
 
+### 2. Convert gVCF to VDS
 
-This installs Hail, its Spark dependencies, and any other Python packages needed by the pipeline.
+This section describes how to convert a list of single-sample gVCF files into a Hail Variant Dataset (VDS).
 
+#### a) Prepare a list of gVCFs
 
-Inputs
-	•	test.txt: Plain text list of absolute paths to gVCF files (one per line).
-	•	gVCF files: Ensure each has an accompanying .tbi index.
+Create a text file where each line is the **absolute path** to a `.gvcf.gz` file you want to include in the multi-sample dataset.
 
+Example (`my_gvcf_list.txt`):
+```
+/rds/general/project/example/data/sample01.gvcf.gz
+/rds/general/project/example/data/sample02.gvcf.gz
+```
 
-⸻
+#### b) Configure your run
 
-Running the Pipeline
+Edit the `set_variables.sh` file to define:
 
-Using the Python Script Directly
-	1.	Ensure the Conda env is active:
+- File paths (gVCF list, output VDS, logs, etc.)
+- Runtime parameters (threads, memory, etc.)
 
-conda activate hail
+Each variable is documented in the file to help guide configuration.
 
+#### c) Submit your job
 
-	2.	Edit gVCF_to_VDS.py to set your paths and parameters (see Configuration).
-	3.	Run the script:
+Use the provided submission script to run the pipeline. You must pass the **absolute path** to your `set_variables.sh` file:
 
-python gVCF_to_VDS.py
-
-
-
-Submitting with PBS (qsub.sh)
-	1.	Make sure qsub.sh is executable:
-
-chmod +x qsub.sh
-
-
-	2.	Submit to the scheduler:
-
-qsub qsub.sh
-
-
-	3.	Monitor job output in the files specified by #PBS -o and #PBS -e.
-
-
-Outputs
-	•	outputs/test.vds/: Directory containing the merged VDS.
-	•	outputs/test_sample_qc.ht: Hail Table of per-sample QC metrics.
-
-Inspect with:
-
-import hail as hl
-mt = hl.read_matrix_table('outputs/test.vds')
-hl.read_table('outputs/test_sample_qc.ht').show()
-
-
-⸻
-
-Troubleshooting
-	•	File handle limits: If you see “too many open files” errors, reduce gvcf_batch_size to ≤ your system’s ulimit.
-	•	Memory errors: Adjust ram and ncpu to fit available nodes.
-	•	Spark UI: Visit http://<driver-host>:4040 to monitor job stages.
-
-
-
-![Hail Workflow](Hail_workflow.png)
-
+```bash
+bash scripts/submit_gVCF_to_VDS.sh /full/path/to/set_variables.sh
+```

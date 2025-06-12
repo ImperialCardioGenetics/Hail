@@ -1,0 +1,16 @@
+name: hail
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - gcc_linux-64
+  - gxx_linux-64
+  - lapack
+  - openblas
+  - openjdk=11
+  - pip
+  - pyspark
+  - python=3.9
+  - pip:
+    - hail
